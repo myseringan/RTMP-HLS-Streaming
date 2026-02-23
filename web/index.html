@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Прямой эфир — bazainfa</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    :root {
+      --bg: #0f1110;
+      --panel: rgba(27,30,29,.78);
+      --glass: rgba(34,38,36,.55);
+      --text: #e6ede8;
+      --muted: #9ca49f;
+      --green: #00ff88;
+      --green2: #1bffb0;
+      --border: #203329;
+      --shadow: 0 20px 60px rgba(0,0,0,.55);
+    }
+
+    * { box-sizing: border-box }
+    html, body { height: 100% }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* Лайв-фон: сетка + частицы */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      background:
+        radial-gradient(1200px 600px at 50% -20%, rgba(0,255,136,.12), transparent 60%) no-repeat,
+        radial-gradient(1000px 600px at 110% 10%, rgba(0,255,136,.08), transparent 50%) no-repeat,
+        linear-gradient(180deg,#0f1110 0%,#121514 60%,#0f1110 100%);
+    }
+    .bg-grid:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(transparent 31px, rgba(0,255,136,.08) 32px) 0 0/32px 32px,
+        linear-gradient(90deg, transparent 31px, rgba(0,255,136,.08) 32px) 0 0/32px 32px;
+      mask-image: radial-gradient(ellipse at 50% -20%, rgba(0,0,0,.9) 10%, transparent 60%);
+      opacity: .08;
+    }
+    canvas.particles { position: fixed; inset: 0; z-index: -2; }
+
+    /* Шапка */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: linear-gradient(180deg,rgba(10,12,11,.85),rgba(10,12,11,.55));
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid #18221d;
+      box-shadow: 0 6px 30px rgba(0,0,0,.35);
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 18px }
+    .brand { display: flex; align-items: center; gap: 14px }
+    .logo {
+      width: 42px; height: 42px; border-radius: 12px;
+      background: conic-gradient(from 210deg,var(--green),#7dffcf,#62ffa7,var(--green));
+      box-shadow: 0 8px 30px rgba(0,255,136,.35);
+    }
+    .title { display: flex; align-items: center; gap: 14px }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: .3px;
+      text-shadow: 0 0 20px rgba(0,255,136,.4)
+    }
+    .eq {
+      display: inline-flex; gap: 4px; align-items: flex-end; margin-left: 6px
+    }
+    .eq i {
+      width: 3px; height: 10px;
+      background: var(--green); border-radius: 2px;
+      box-shadow: 0 0 10px rgba(0,255,136,.8);
+      animation: bar 1s ease-in-out infinite
+    }
+    .eq i:nth-child(2){animation-delay:.1s}
+    .eq i:nth-child(3){animation-delay:.2s}
+    .eq i:nth-child(4){animation-delay:.3s}
+    .eq i:nth-child(5){animation-delay:.4s}
+    @keyframes bar { 0%,100%{height:8px} 50%{height:18px} }
+
+    main { max-width: 1120px; margin: 26px auto; padding: 0 18px }
+
+    /* Панель состояния */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex; gap: 12px; align-items: center;
+      box-shadow: var(--shadow);
+    }
+    .dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #49524e; box-shadow: 0 0 6px #49524e
+    }
+    .dot.ok { background: var(--green); box-shadow: 0 0 16px var(--green) }
+    .status { color: var(--muted); font-size: 14px }
+    select {
+      margin-left: auto;
+      appearance: none;
+      background: var(--glass);
+      color: var(--text);
+      border: 1px solid #2a3a33;
+      border-radius: 10px;
+      padding: 8px 36px 8px 12px;
+      position: relative;
+      outline: none;
+      box-shadow: 0 6px 22px rgba(0,0,0,.35)
+    }
+    select:focus,select:hover {
+      border-color: #41ffa8;
+      box-shadow: 0 0 0 1px #41ffa8, 0 10px 24px rgba(0,255,136,.2)
+    }
+
+    /* Карточка видео */
+    .card {
+      margin-top: 14px;
+      background: linear-gradient(180deg,rgba(18,22,20,.75),rgba(20,24,22,.55));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 25px 60px rgba(0,0,0,.55)
+    }
+    .frame {
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000
+    }
+    .frame:before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 14px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(0,255,136,.85), rgba(0,255,136,.15), rgba(0,255,136,.85));
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      filter: blur(.6px);
+      opacity: .6;
+    }
+    video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16/9;
+      border-radius: 12px;
+      background: #000;
+      opacity: 0;
+      transition: opacity .35s ease
+    }
+    .wm {
+      position: absolute;
+      top: 10px; left: 12px;
+      background: rgba(0,0,0,.45);
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.07)
+    }
+
+    /* Прелоадер */
+    .loader {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      background: linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.55));
+      backdrop-filter: saturate(120%) blur(1px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .25s
+    }
+    .frame.loading .loader { opacity: 1; pointer-events: auto }
+    .spinner {
+      width: 54px; height: 54px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,.14);
+      border-top-color: var(--green);
+      animation: spin 1s linear infinite;
+      box-shadow: 0 0 18px rgba(0,255,136,.4)
+    }
+    @keyframes spin { to { transform: rotate(360deg) } }
+
+    .actions { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:10px }
+    .btn {
+      display:inline-flex; gap:8px; align-items:center;
+      padding:8px 14px;
+      border-radius:10px;
+      background:var(--glass);
+      border:1px solid #2a3a33;
+      color:#d5e4db;
+      text-decoration:none;
+      transition:.2s;
+      font-size:14px
+    }
+    .btn:hover {
+      transform:translateY(-1px);
+      box-shadow:0 10px 24px rgba(0,255,136,.18),0 0 0 1px #41ffa8
+    }
+    .small { font-size:12px; color:var(--muted); margin-top:6px }
+
+    footer {
+      max-width:1120px;
+      margin:26px auto 40px;
+      padding:0 18px;
+      color:#93a098;
+      text-align:center;
+      font-size:13px
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <canvas class="particles"></canvas>
+
+  <header>
+    <div class="wrap">
+      <div class="title">
+        <div class="logo" aria-hidden="true"></div>
+        <h1>Прямой эфир</h1>
+        <div class="eq" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="panel">
+      <div class="dot" id="dot"></div>
+      <div class="status" id="status">Ожидание потока…</div>
+      <select id="cam" title="Выбор камеры"></select>
+    </div>
+
+    <div class="card">
+      <div class="frame loading" id="frame">
+        <div class="wm" id="wm">bazainfa • stream1</div>
+        <video id="video" controls autoplay muted playsinline></video>
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+      <div class="small">Если звука нет — кликни по видео. Многие браузеры глушат автоплей со звуком.</div>
+    </div>
+  </main>
+
+  <footer>© <span id="year"></span> bazainfa · RTMP → HLS</footer>
+
+  <script>
+    /* ===== настройки потоков ===== */
+    const STREAMS = [
+      {id:'stream1', title:'Камера 1'},
+      {id:'stream2', title:'Камера 2'},
+      {id:'stream3', title:'Камера 3'}
+    ];
+
+    const video = document.getElementById('video');
+    const frame = document.getElementById('frame');
+    const dot = document.getElementById('dot');
+    const statusEl = document.getElementById('status');
+    const wm = document.getElementById('wm');
+    const select = document.getElementById('cam');
+
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    STREAMS.forEach(s => {
+      const o=document.createElement('option');
+      o.value=s.id; o.textContent=s.title;
+      select.appendChild(o);
+    });
+
+    function setStatus(ok, text){
+      dot.className = 'dot' + (ok ? ' ok' : '');
+      statusEl.textContent = text;
+    }
+    function m3u8(id){ return `/stream/${id}.m3u8`; }
+    function src(id){ return m3u8(id) + `?v=${Date.now()}`; }
+
+    function attach(id){
+      frame.classList.add('loading');
+      setStatus(false,'Подключение…');
+      wm.textContent = `bazainfa • ${id}`;
+      if(window.hls){ try{ window.hls.destroy(); }catch(e){} }
+
+      if(window.Hls && Hls.isSupported()){
+        window.hls = new Hls({lowLatencyMode:true, liveSyncDuration:3, liveMaxLatencyDuration:6, fragLoadingTimeout:8000, manifestLoadingTimeOut:8000});
+        window.hls.loadSource(src(id));
+        window.hls.attachMedia(video);
+        window.hls.on(Hls.Events.MANIFEST_PARSED, ()=>{
+          frame.classList.remove('loading');
+          setStatus(true,'Поток подключён');
+          requestAnimationFrame(()=> video.style.opacity=1);
+          video.play().catch(()=>{});
+        });
+        window.hls.on(Hls.Events.ERROR, (_,data)=>{
+          if(data && data.fatal){
+            setStatus(false,'Ошибка, переподключение…');
+            video.style.opacity=0;
+            setTimeout(()=>attach(id),1200);
+          }
+        });
+      } else if(video.canPlayType('application/vnd.apple.mpegurl')){
+        video.src = src(id);
+        video.onloadedmetadata = ()=>{
+          frame.classList.remove('loading');
+          setStatus(true,'Поток подключён');
+          video.style.opacity=1;
+          video.play().catch(()=>{});
+        };
+      } else {
+        setStatus(false,'Браузер не поддерживает HLS');
+      }
+    }
+
+    select.addEventListener('change', e=>{
+      video.style.opacity=0;
+      attach(e.target.value);
+    });
+
+    select.value = STREAMS[0].id;
+    attach(select.value);
+
+    ['waiting','seeking','stalled','loadstart'].forEach(ev=>
+      video.addEventListener(ev, ()=> frame.classList.add('loading'))
+    );
+    ['playing','canplay','canplaythrough'].forEach(ev=>
+      video.addEventListener(ev, ()=> frame.classList.remove('loading'))
+    );
+
+    /* ===== частицы на фоне ===== */
+    const c=document.querySelector('canvas.particles'), ctx=c.getContext('2d');
+    let W,H,pts=[];
+    function resize(){
+      W=c.width=innerWidth;
+      H=c.height=innerHeight;
+      pts=Array.from({length:90},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+0.8,dx:(Math.random()-.5)*.4,dy:(Math.random()-.5)*.4}));
+    }
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle='rgba(0,255,136,.22)';
+      pts.forEach(p=>{
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.r,0,6.283);
+        ctx.fill();
+        p.x+=p.dx; p.y+=p.dy;
+        if(p.x<0||p.x>W) p.dx*=-1;
+        if(p.y<0||p.y>H) p.dy*=-1;
+      });
+      requestAnimationFrame(draw);
+    }
+    addEventListener('resize',resize);
+    resize();
+    draw();
+  </script>
+</body>
+</html>
